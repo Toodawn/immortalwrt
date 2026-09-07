@@ -5,39 +5,74 @@ on:
 
 jobs:
   build:
+
     runs-on: ubuntu-22.04
 
     steps:
 
+    # 拉取源码
     - name: Checkout
       uses: actions/checkout@v4
 
 
+    # 清理空间
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo apt clean
+
+
+    # 编译环境
     - name: Install dependencies
       run: |
         sudo apt update
+
         sudo apt install -y \
-          build-essential \
-          clang \
-          flex \
-          bison \
-          g++ \
-          gawk \
-          gettext \
-          git \
-          libncurses-dev \
-          libssl-dev \
-          python3 \
-          rsync \
-          unzip \
-          zlib1g-dev
+        build-essential \
+        clang \
+        flex \
+        bison \
+        g++ \
+        gawk \
+        gettext \
+        git \
+        libncurses-dev \
+        libssl-dev \
+        python3 \
+        rsync \
+        unzip \
+        zlib1g-dev \
+        file
 
 
+    # feeds
     - name: Update feeds
       run: |
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
+
+    # 第三方插件
+
+    - name: Add OpenClash
+      run: |
+        git clone https://github.com/vernesong/OpenClash.git package/OpenClash
+
+
+    - name: Add Daed
+      run: |
+        git clone https://github.com/daeuniverse/daed.git package/daed
+
+
+    - name: Add Lucky
+      run: |
+        git clone https://github.com/gdy666/luci-app-lucky.git package/luci-app-lucky
+
+
+
+    # 加载AX6000配置
 
     - name: Load AX6000 config
       run: |
@@ -45,19 +80,32 @@ jobs:
         make defconfig
 
 
+
+    # 下载源码
+
     - name: Download packages
       run: |
         make download -j8
 
+
+
+    # 编译
 
     - name: Compile firmware
       run: |
         make -j$(nproc) V=s
 
 
+
+    # 上传固件
+
     - name: Upload firmware
+
       uses: actions/upload-artifact@v4
+
       with:
-        name: AX6000-UbootMod
+
+        name: ImmortalWrt-AX6000-UbootMod
+
         path: |
           bin/targets/mediatek/filogic/*

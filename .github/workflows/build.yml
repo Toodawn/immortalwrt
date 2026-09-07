@@ -1,0 +1,63 @@
+name: Build ImmortalWrt AX6000 U-BootMod
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          build-essential \
+          clang \
+          flex \
+          bison \
+          g++ \
+          gawk \
+          gettext \
+          git \
+          libncurses-dev \
+          libssl-dev \
+          python3 \
+          rsync \
+          unzip \
+          zlib1g-dev
+
+
+    - name: Update feeds
+      run: |
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+
+    - name: Load AX6000 config
+      run: |
+        cp ax6000.config .config
+        make defconfig
+
+
+    - name: Download packages
+      run: |
+        make download -j8
+
+
+    - name: Compile firmware
+      run: |
+        make -j$(nproc) V=s
+
+
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      with:
+        name: AX6000-UbootMod
+        path: |
+          bin/targets/mediatek/filogic/*

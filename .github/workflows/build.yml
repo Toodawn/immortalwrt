@@ -1,275 +1,424 @@
 name: Build ImmortalWrt AX6000 U-BootMod
 
+
 on:
+
   workflow_dispatch:
 
   schedule:
+
     - cron: "0 2 * * 0"
 
 
+
 permissions:
+
   contents: write
 
 
+
 env:
+
   TZ: Asia/Shanghai
+
 
 
 jobs:
 
+
   build:
 
+
     runs-on: ubuntu-22.04
+
 
 
     steps:
 
 
+
     # =========================
-    # 拉取源码
+    # Checkout
     # =========================
 
     - name: Checkout
+
       uses: actions/checkout@v4
 
 
 
     # =========================
-    # 释放空间
+    # 清理空间
     # =========================
 
     - name: Free disk space
+
       run: |
+
         sudo rm -rf /usr/local/lib/android
+
         sudo rm -rf /usr/share/dotnet
+
         sudo rm -rf /opt/ghc
+
         sudo apt clean
 
 
 
     # =========================
-    # 编译缓存
+    # 缓存
     # =========================
 
     - name: Cache ImmortalWrt
 
+
       uses: actions/cache@v4
+
 
       with:
 
+
         path: |
+
           dl
+
           build_dir
+
           staging_dir
+
+          toolchain
+
           tmp
+
+          .config
+
           package/OpenClash
+
           package/daed
+
           package/luci-app-lucky
 
 
-        key: immortalwrt-${{ runner.os }}-${{ hashFiles('ax6000.config') }}
+
+        key: immortalwrt-ax6000-${{ hashFiles('ax6000.config','feeds.conf.default') }}
+
 
 
         restore-keys: |
-          immortalwrt-${{ runner.os }}-
+
+          immortalwrt-ax6000-
 
 
 
     # =========================
-    # 安装依赖
+    # 依赖
     # =========================
 
     - name: Install dependencies
 
+
       run: |
+
 
         sudo apt update
 
+
         sudo apt install -y \
+
           build-essential \
+
           clang \
+
           flex \
+
           bison \
+
           g++ \
+
           gawk \
+
           gettext \
+
           git \
+
           libncurses-dev \
+
           libssl-dev \
+
           python3 \
+
           rsync \
+
           unzip \
+
           zlib1g-dev \
+
           file
 
 
 
+
+
     # =========================
-    # 更新 feeds
+    # feeds
     # =========================
 
     - name: Update feeds
 
+
       run: |
 
-        ./scripts/feeds update -a
 
-        ./scripts/feeds install -a
+        if [ ! -d feeds/luci ]; then
+
+
+          ./scripts/feeds update -a
+
+
+          ./scripts/feeds install -a
+
+
+        else
+
+
+          echo "feeds cache exists"
+
+
+        fi
+
+
 
 
 
     # =========================
-    # 添加 OpenClash
+    # OpenClash
     # =========================
 
     - name: Add OpenClash
 
+
       run: |
 
-        git clone --depth=1 \
-        https://github.com/vernesong/OpenClash.git \
-        package/OpenClash
+
+        if [ ! -d package/OpenClash ]; then
+
+
+          git clone --depth=1 \
+
+          https://github.com/vernesong/OpenClash.git \
+
+          package/OpenClash
+
+
+        fi
+
+
 
 
 
     # =========================
-    # 添加 Daed
+    # Daed
     # =========================
 
     - name: Add Daed
 
+
       run: |
 
-        git clone --depth=1 \
-        https://github.com/daeuniverse/daed.git \
-        package/daed
+
+        if [ ! -d package/daed ]; then
+
+
+          git clone --depth=1 \
+
+          https://github.com/daeuniverse/daed.git \
+
+          package/daed
+
+
+        fi
+
+
 
 
 
     # =========================
-    # 添加 Lucky
+    # Lucky
     # =========================
 
     - name: Add Lucky
 
+
       run: |
 
-        git clone --depth=1 \
-        https://github.com/gdy666/luci-app-lucky.git \
-        package/luci-app-lucky
+
+        if [ ! -d package/luci-app-lucky ]; then
+
+
+          git clone --depth=1 \
+
+          https://github.com/gdy666/luci-app-lucky.git \
+
+          package/luci-app-lucky
+
+
+        fi
+
+
 
 
 
     # =========================
-    # 设置首次启动脚本权限
+    # 首次启动脚本权限
     # =========================
 
     - name: Set custom scripts permission
 
+
       run: |
+
 
         chmod +x files/etc/uci-defaults/* || true
 
 
 
+
+
     # =========================
-    # 加载AX6000配置
+    # 加载配置
     # =========================
 
     - name: Load AX6000 config
 
+
       run: |
 
+
         cp ax6000.config .config
+
 
         make defconfig
 
 
 
+
+
     # =========================
-    # 下载源码包
+    # 下载
     # =========================
 
     - name: Download packages
 
+
       run: |
+
 
         make download -j8
 
 
 
+
+
     # =========================
-    # 编译固件
+    # 编译
     # =========================
 
     - name: Compile firmware
 
+
       run: |
 
-        make -j$(nproc) V=s
+
+        make -j8
+
+
 
 
 
     # =========================
-    # 整理输出
+    # 固件整理
     # =========================
-    
+
     - name: Prepare firmware
 
+
       run: |
+
 
         mkdir -p release
 
 
+
         echo "=== Firmware list ==="
 
-        find bin/targets -type f | grep -E "itb|img|bin"
+
+
+        find bin/targets -type f | grep -E "itb|img"
+
 
 
         echo "=== Copy sysupgrade ==="
 
 
+
         cp $(find bin/targets -name "*sysupgrade.itb") release/
+
 
 
         cp $(find bin/targets -name "sha256sums") release/
 
 
 
+
+
     # =========================
-    # Actions附件
+    # Artifact
     # =========================
 
     - name: Upload Artifact
 
+
       uses: actions/upload-artifact@v4
+
 
       with:
 
+
         name: AX6000-UbootMod-sysupgrade
+
 
         path: release/*
 
 
 
+
+
     # =========================
-    # 自动Release
+    # Release
     # =========================
 
     - name: Create Release
 
+
       uses: softprops/action-gh-release@v2
+
 
       with:
 
+
         tag_name: AX6000-${{ github.run_number }}
+
 
         name: ImmortalWrt AX6000 U-BootMod Build ${{ github.run_number }}
 
+
         files: |
+
           release/*
 
 
+
       env:
+
 
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

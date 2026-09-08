@@ -213,7 +213,7 @@ jobs:
     # =========================
     # 整理输出
     # =========================
-
+    
     - name: Prepare firmware
 
       run: |
@@ -221,8 +221,16 @@ jobs:
         mkdir -p release
 
 
+        echo "Checking firmware files..."
+
+        ls -lh bin/targets/mediatek/filogic/
+
+
+        echo "Copy sysupgrade firmware..."
+
+
         cp \
-        bin/targets/mediatek/filogic/*ubootmod*squashfs-sysupgrade.itb \
+        bin/targets/mediatek/filogic/*sysupgrade.itb \
         release/
 
 

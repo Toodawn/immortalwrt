@@ -27,8 +27,6 @@ env:
 
 
 
-
-
 jobs:
 
 
@@ -56,7 +54,7 @@ jobs:
 
 
     # =========================
-    # 清理空间
+    # Free disk
     # =========================
 
     - name: Free disk space
@@ -104,23 +102,23 @@ jobs:
 
           package/feeds
 
-          ~/.ccache
-
           package/OpenClash
 
           package/daed
 
           package/luci-app-lucky
 
+          ~/.ccache
+
 
 
         key:
 
-          immortalwrt-ax6000-${{ hashFiles('ax6000.config','feeds.conf.default') }}
+          immortalwrt-ax6000-${{ github.ref_name }}-${{ hashFiles('ax6000.config','feeds.conf.default') }}
 
 
 
-        restore-keys:
+        restore-keys: |
 
           immortalwrt-ax6000-
 
@@ -129,14 +127,17 @@ jobs:
 
 
     # =========================
-    # 安装依赖
+    # Dependencies
     # =========================
 
     - name: Install dependencies
 
+
       run: |
 
+
         sudo apt update
+
 
         sudo apt install -y \
           build-essential \
@@ -161,7 +162,7 @@ jobs:
 
 
     # =========================
-    # ccache
+    # Setup ccache
     # =========================
 
     - name: Setup ccache
@@ -172,14 +173,15 @@ jobs:
 
         ccache --max-size=5G
 
-        ccache -z
+
+        ccache -s
 
 
 
 
 
     # =========================
-    # feeds 最新更新
+    # Update feeds
     # =========================
 
     - name: Update feeds
@@ -192,13 +194,8 @@ jobs:
 
 
         ./scripts/feeds install -a
-
-
-
-
-
-    # =========================
-    # OpenClash 最新版
+        # =========================
+    # Add OpenClash
     # =========================
 
     - name: Add OpenClash
@@ -207,32 +204,19 @@ jobs:
       run: |
 
 
-        if [ ! -d package/OpenClash ]; then
+        rm -rf package/OpenClash
 
 
-          git clone --depth=1 \
-
-          https://github.com/vernesong/OpenClash.git \
-
-          package/OpenClash
-
-
-        else
-
-
-          cd package/OpenClash
-
-          git pull
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/vernesong/OpenClash.git \
+        package/OpenClash
 
 
 
 
 
     # =========================
-    # Daed 最新版
+    # Add Daed
     # =========================
 
     - name: Add Daed
@@ -241,32 +225,19 @@ jobs:
       run: |
 
 
-        if [ ! -d package/daed ]; then
+        rm -rf package/daed
 
 
-          git clone --depth=1 \
-
-          https://github.com/daeuniverse/daed.git \
-
-          package/daed
-
-
-        else
-
-
-          cd package/daed
-
-          git pull
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/daeuniverse/daed.git \
+        package/daed
 
 
 
 
 
     # =========================
-    # Lucky 最新版
+    # Add Lucky
     # =========================
 
     - name: Add Lucky
@@ -275,35 +246,22 @@ jobs:
       run: |
 
 
-        if [ ! -d package/luci-app-lucky ]; then
+        rm -rf package/luci-app-lucky
 
 
-          git clone --depth=1 \
-
-          https://github.com/gdy666/luci-app-lucky.git \
-
-          package/luci-app-lucky
-
-
-        else
-
-
-          cd package/luci-app-lucky
-
-          git pull
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/gdy666/luci-app-lucky.git \
+        package/luci-app-lucky
 
 
 
 
 
     # =========================
-    # 自定义脚本权限
+    # Set uci-default permission
     # =========================
 
-    - name: Set scripts permission
+    - name: Set custom scripts permission
 
 
       run: |
@@ -316,7 +274,7 @@ jobs:
 
 
     # =========================
-    # AX6000配置
+    # Load AX6000 config
     # =========================
 
     - name: Load AX6000 config
@@ -335,7 +293,7 @@ jobs:
 
 
     # =========================
-    # 下载
+    # Download packages
     # =========================
 
     - name: Download packages
@@ -344,14 +302,14 @@ jobs:
       run: |
 
 
-        make download -j16
+        make download -j$(nproc)
 
 
 
 
 
     # =========================
-    # 编译
+    # Compile firmware
     # =========================
 
     - name: Compile firmware
@@ -360,14 +318,20 @@ jobs:
       run: |
 
 
+        echo "===== Compile Start ====="
+
+
         make -j$(nproc) V=s
+
+
+        echo "===== Compile Done ====="
 
 
 
 
 
     # =========================
-    # 检查输出
+    # Show firmware
     # =========================
 
     - name: Check firmware
@@ -376,21 +340,22 @@ jobs:
       run: |
 
 
-        find bin/targets/mediatek/filogic -type f
+        echo "===== Firmware List ====="
+
+
+        find bin/targets -type f
 
 
 
 
 
     # =========================
-    # 打包全部文件
+    # Prepare firmware
     # =========================
 
     - name: Prepare firmware
 
-
       run: |
-
 
         mkdir -p release
 
@@ -399,45 +364,79 @@ jobs:
 
 
 
-        cp -r $TARGET/* release/
+        VERSION=$(grep DISTRIB_RELEASE package/base-files/files/etc/openwrt_release | cut -d '"' -f2)
 
 
 
-        cp .config release/config.buildinfo
+        DATE=$(date +"%Y%m%d-%H%M")
 
 
 
-        git rev-parse HEAD > release/source_commit.txt
-
-
-        git log -1 > release/source_log.txt
+        echo "Copy firmware files..."
 
 
 
+        cp $TARGET/*ubootmod-bl31-uboot.fip release/ || true
 
 
-        tar -czf release/immortalwrt-ax6000-source.tar.gz \
+        cp $TARGET/*ubootmod-preloader.bin release/ || true
 
-        --exclude=build_dir \
 
-        --exclude=staging_dir \
+        cp $TARGET/*ubootmod-initramfs-factory.ubi release/ || true
 
-        --exclude=dl \
 
-        --exclude=tmp \
+        cp $TARGET/*ubootmod-initramfs-recovery.itb release/ || true
 
-        .
 
+
+
+
+        SYSUPGRADE=$(find $TARGET -name "*ubootmod*squashfs-sysupgrade.itb" | head -n 1)
+
+
+
+        if [ -z "$SYSUPGRADE" ]; then
+
+          echo "ERROR: sysupgrade.itb not found"
+
+          exit 1
+
+        fi
+
+
+
+
+
+        cp "$SYSUPGRADE" \
+        release/AX6000-UbootMod-ImmortalWrt-${VERSION}-${DATE}.itb
+
+
+
+
+
+        echo "Generate SHA256..."
+
+
+
+        cd release
+
+
+        sha256sum * > sha256sums
+
+
+        cd ..
+
+
+
+        echo "===== Release Files ====="
 
 
         ls -lh release/
 
 
 
-
-
     # =========================
-    # Artifact
+    # Upload Artifact
     # =========================
 
     - name: Upload Artifact
@@ -449,7 +448,7 @@ jobs:
       with:
 
 
-        name: AX6000-UbootMod-Full
+        name: AX6000-UbootMod-${{ github.run_number }}
 
 
         path: release/*
@@ -459,7 +458,7 @@ jobs:
 
 
     # =========================
-    # Release
+    # Create Release
     # =========================
 
     - name: Create Release
@@ -474,9 +473,41 @@ jobs:
         tag_name: AX6000-${{ github.run_number }}
 
 
-        name:
+        name: >
 
-          ImmortalWrt AX6000 U-BootMod Full Build ${{ github.run_number }}
+          ImmortalWrt AX6000 U-BootMod
+
+          Build ${{ github.run_number }}
+
+
+
+        body: |
+
+          ## ImmortalWrt AX6000 U-BootMod
+
+
+          Build Number:
+
+          ${{ github.run_number }}
+
+
+          Build Time:
+
+          ${{ env.TZ }}
+
+
+          Firmware:
+
+          - bl31-uboot.fip
+
+          - preloader.bin
+
+          - initramfs-factory.ubi
+
+          - initramfs-recovery.itb
+
+          - squashfs-sysupgrade.itb
+
 
 
         files: |

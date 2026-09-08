@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# 设置LAN地址
+
+uci set network.lan.ipaddr='10.0.0.1'
+uci set network.lan.netmask='255.255.255.0'
+
+
+# 设置时区
+
+uci set system.@system[0].timezone='CST-8'
+uci set system.@system[0].zonename='Asia/Shanghai'
+
+
+# 开启irqbalance
+
+/etc/init.d/irqbalance enable 2>/dev/null
+
+
+# 开启zram
+
+/etc/init.d/zram enable 2>/dev/null
+
+
+uci commit
+
+
+exit 0

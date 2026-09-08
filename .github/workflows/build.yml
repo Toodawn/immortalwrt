@@ -3,31 +3,41 @@ name: Build ImmortalWrt AX6000 U-BootMod
 on:
   workflow_dispatch:
 
+  schedule:
+    - cron: "0 2 * * 0"
+
+
+permissions:
+  contents: write
+
+
+env:
+  TZ: Asia/Shanghai
+
+
 jobs:
+
   build:
 
     runs-on: ubuntu-22.04
 
+
     steps:
 
+
+    # =========================
     # 拉取源码
+    # =========================
+
     - name: Checkout
       uses: actions/checkout@v4
-      
-    - name: Cache ImmortalWrt build
-      uses: actions/cache@v4
-      with:
-        path: |
-          build_dir
-          staging_dir
-          dl
-          tmp
-        key: immortalwrt-${{ runner.os }}-${{ hashFiles('ax6000.config') }}
-        restore-keys: |
-          immortalwrt-${{ runner.os }}-
 
 
-    # 清理空间
+
+    # =========================
+    # 释放空间
+    # =========================
+
     - name: Free disk space
       run: |
         sudo rm -rf /usr/local/lib/android
@@ -36,88 +46,226 @@ jobs:
         sudo apt clean
 
 
-    # 编译环境
+
+    # =========================
+    # 编译缓存
+    # =========================
+
+    - name: Cache ImmortalWrt
+
+      uses: actions/cache@v4
+
+      with:
+
+        path: |
+          dl
+          build_dir
+          staging_dir
+          tmp
+          package/OpenClash
+          package/daed
+          package/luci-app-lucky
+
+
+        key: immortalwrt-${{ runner.os }}-${{ hashFiles('ax6000.config') }}
+
+
+        restore-keys: |
+          immortalwrt-${{ runner.os }}-
+
+
+
+    # =========================
+    # 安装依赖
+    # =========================
+
     - name: Install dependencies
+
       run: |
+
         sudo apt update
 
         sudo apt install -y \
-        build-essential \
-        clang \
-        flex \
-        bison \
-        g++ \
-        gawk \
-        gettext \
-        git \
-        libncurses-dev \
-        libssl-dev \
-        python3 \
-        rsync \
-        unzip \
-        zlib1g-dev \
-        file
+          build-essential \
+          clang \
+          flex \
+          bison \
+          g++ \
+          gawk \
+          gettext \
+          git \
+          libncurses-dev \
+          libssl-dev \
+          python3 \
+          rsync \
+          unzip \
+          zlib1g-dev \
+          file
 
 
-    # feeds
+
+    # =========================
+    # 更新 feeds
+    # =========================
+
     - name: Update feeds
+
       run: |
+
         ./scripts/feeds update -a
+
         ./scripts/feeds install -a
 
 
-    # 第三方插件
+
+    # =========================
+    # 添加 OpenClash
+    # =========================
 
     - name: Add OpenClash
-      run: |
-        git clone https://github.com/vernesong/OpenClash.git package/OpenClash
 
+      run: |
+
+        git clone --depth=1 \
+        https://github.com/vernesong/OpenClash.git \
+        package/OpenClash
+
+
+
+    # =========================
+    # 添加 Daed
+    # =========================
 
     - name: Add Daed
-      run: |
-        git clone https://github.com/daeuniverse/daed.git package/daed
 
+      run: |
+
+        git clone --depth=1 \
+        https://github.com/daeuniverse/daed.git \
+        package/daed
+
+
+
+    # =========================
+    # 添加 Lucky
+    # =========================
 
     - name: Add Lucky
+
       run: |
-        git clone https://github.com/gdy666/luci-app-lucky.git package/luci-app-lucky
+
+        git clone --depth=1 \
+        https://github.com/gdy666/luci-app-lucky.git \
+        package/luci-app-lucky
 
 
 
+    # =========================
+    # 设置首次启动脚本权限
+    # =========================
+
+    - name: Set custom scripts permission
+
+      run: |
+
+        chmod +x files/etc/uci-defaults/* || true
+
+
+
+    # =========================
     # 加载AX6000配置
+    # =========================
 
     - name: Load AX6000 config
+
       run: |
+
         cp ax6000.config .config
+
         make defconfig
 
 
 
-    # 下载源码
+    # =========================
+    # 下载源码包
+    # =========================
 
     - name: Download packages
+
       run: |
+
         make download -j8
 
 
 
-    # 编译
+    # =========================
+    # 编译固件
+    # =========================
 
     - name: Compile firmware
+
       run: |
-        make defconfig
+
         make -j$(nproc) V=s
 
-    # 上传固件
 
-    - name: Upload firmware
+
+    # =========================
+    # 整理输出
+    # =========================
+
+    - name: Prepare firmware
+
+      run: |
+
+        mkdir -p release
+
+
+        cp \
+        bin/targets/mediatek/filogic/*ubootmod*squashfs-sysupgrade.itb \
+        release/
+
+
+        cp \
+        bin/targets/mediatek/filogic/sha256sums \
+        release/
+
+
+
+    # =========================
+    # Actions附件
+    # =========================
+
+    - name: Upload Artifact
 
       uses: actions/upload-artifact@v4
 
       with:
 
-        name: ImmortalWrt-AX6000-UbootMod
+        name: AX6000-UbootMod-sysupgrade
 
-        path: |
-          bin/targets/mediatek/filogic/*ubootmod*squashfs-sysupgrade.itb
-          bin/targets/mediatek/filogic/sha256sums
+        path: release/*
+
+
+
+    # =========================
+    # 自动Release
+    # =========================
+
+    - name: Create Release
+
+      uses: softprops/action-gh-release@v2
+
+      with:
+
+        tag_name: AX6000-${{ github.run_number }}
+
+        name: ImmortalWrt AX6000 U-BootMod Build ${{ github.run_number }}
+
+        files: |
+          release/*
+
+
+      env:
+
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

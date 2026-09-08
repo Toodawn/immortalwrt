@@ -221,22 +221,18 @@ jobs:
         mkdir -p release
 
 
-        echo "Checking firmware files..."
+        echo "=== Firmware list ==="
 
-        ls -lh bin/targets/mediatek/filogic/
-
-
-        echo "Copy sysupgrade firmware..."
+        find bin/targets -type f | grep -E "itb|img|bin"
 
 
-        cp \
-        bin/targets/mediatek/filogic/*sysupgrade.itb \
-        release/
+        echo "=== Copy sysupgrade ==="
 
 
-        cp \
-        bin/targets/mediatek/filogic/sha256sums \
-        release/
+        cp $(find bin/targets -name "*sysupgrade.itb") release/
+
+
+        cp $(find bin/targets -name "sha256sums") release/
 
 
 

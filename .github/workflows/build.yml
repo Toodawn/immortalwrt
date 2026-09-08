@@ -2,43 +2,33 @@ name: Build ImmortalWrt AX6000 U-BootMod
 
 
 on:
-
   workflow_dispatch:
 
   schedule:
-
     - cron: "0 2 * * 0"
 
 
-
 permissions:
-
   contents: write
 
 
-
 env:
-
   TZ: Asia/Shanghai
 
 
 
 jobs:
 
-
   build:
 
-
     runs-on: ubuntu-22.04
-
 
 
     steps:
 
 
-
     # =========================
-    # Checkout
+    # 拉取源码
     # =========================
 
     - name: Checkout
@@ -56,9 +46,7 @@ jobs:
       run: |
 
         sudo rm -rf /usr/local/lib/android
-
         sudo rm -rf /usr/share/dotnet
-
         sudo rm -rf /opt/ghc
 
         sudo apt clean
@@ -103,20 +91,23 @@ jobs:
         key: immortalwrt-ax6000-${{ hashFiles('ax6000.config','feeds.conf.default') }}
 
 
-
         restore-keys: |
 
           immortalwrt-ax6000-
 
 
 
+
+
     # =========================
-    # 依赖
+    # 安装依赖
     # =========================
 
     - name: Install dependencies
 
+
       run: |
+
 
         sudo apt update
 
@@ -152,22 +143,9 @@ jobs:
       run: |
 
 
-        if [ ! -d feeds/luci ]; then
+        ./scripts/feeds update -a
 
-
-          ./scripts/feeds update -a
-
-
-          ./scripts/feeds install -a
-
-
-        else
-
-
-          echo "feeds cache exists"
-
-
-        fi
+        ./scripts/feeds install -a
 
 
 
@@ -183,17 +161,12 @@ jobs:
       run: |
 
 
-        if [ ! -d package/OpenClash ]; then
+        rm -rf package/OpenClash
 
 
-          git clone --depth=1 \
-
-          https://github.com/vernesong/OpenClash.git \
-
-          package/OpenClash
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/vernesong/OpenClash.git \
+        package/OpenClash
 
 
 
@@ -209,17 +182,12 @@ jobs:
       run: |
 
 
-        if [ ! -d package/daed ]; then
+        rm -rf package/daed
 
 
-          git clone --depth=1 \
-
-          https://github.com/daeuniverse/daed.git \
-
-          package/daed
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/daeuniverse/daed.git \
+        package/daed
 
 
 
@@ -235,17 +203,12 @@ jobs:
       run: |
 
 
-        if [ ! -d package/luci-app-lucky ]; then
+        rm -rf package/luci-app-lucky
 
 
-          git clone --depth=1 \
-
-          https://github.com/gdy666/luci-app-lucky.git \
-
-          package/luci-app-lucky
-
-
-        fi
+        git clone --depth=1 \
+        https://github.com/gdy666/luci-app-lucky.git \
+        package/luci-app-lucky
 
 
 
@@ -268,7 +231,7 @@ jobs:
 
 
     # =========================
-    # 加载配置
+    # 加载AX6000配置
     # =========================
 
     - name: Load AX6000 config
@@ -287,7 +250,7 @@ jobs:
 
 
     # =========================
-    # 下载
+    # 下载源码包
     # =========================
 
     - name: Download packages
@@ -312,14 +275,33 @@ jobs:
       run: |
 
 
-        make -j8
+        make -j$(nproc)
 
 
 
 
 
     # =========================
-    # 固件整理
+    # 检查固件
+    # =========================
+
+    - name: Check firmware
+
+
+      run: |
+
+
+        echo "========== OUTPUT =========="
+
+
+        find bin/targets -type f
+
+
+
+
+
+    # =========================
+    # 整理固件
     # =========================
 
     - name: Prepare firmware
@@ -332,30 +314,40 @@ jobs:
 
 
 
-        echo "=== Firmware list ==="
+        FILE=$(find bin/targets -name "*sysupgrade.itb" | head -n 1)
 
 
 
-        find bin/targets -type f | grep -E "itb|img"
+        if [ -z "$FILE" ]; then
+
+          echo "No sysupgrade.itb found"
+
+          exit 1
+
+        fi
 
 
 
-        echo "=== Copy sysupgrade ==="
+        cp "$FILE" release/
 
 
 
-        cp $(find bin/targets -name "*sysupgrade.itb") release/
+        SHA=$(find bin/targets -name "sha256sums" | head -n 1)
 
 
 
-        cp $(find bin/targets -name "sha256sums") release/
+        if [ -n "$SHA" ]; then
+
+          cp "$SHA" release/
+
+        fi
 
 
 
 
 
     # =========================
-    # Artifact
+    # 上传Artifact
     # =========================
 
     - name: Upload Artifact
